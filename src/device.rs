@@ -52,7 +52,7 @@ struct ResponseVec {
     pub devices: Vec<Response>
 }
 
-pub type Result = ::std::result::Result<(Vec<Response>, ResponseHeaders), Box<Error>>;
+pub type Result = ::std::result::Result<(Vec<Response>, ResponseHeaders), Box<dyn Error>>;
 
 impl PushbulletClient {
     /// Get a list of devices belonging to the current user.

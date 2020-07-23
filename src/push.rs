@@ -107,7 +107,7 @@ struct ResponseVec {
     pub pushes: Vec<Response>
 }
 
-pub type Result = ::std::result::Result<(Response, ResponseHeaders), Box<Error>>;
+pub type Result = ::std::result::Result<(Response, ResponseHeaders), Box<dyn Error>>;
 
 
 /// Parameters for [`PushbulletClient::list_push()`](../struct.PushbulletClient.html#method.list_push)
@@ -178,7 +178,7 @@ impl PushbulletClient {
 
     /// Request push history.
     pub fn list_push(&self, condition: &ListCondition)
-                     -> ::std::result::Result<(Vec<Response>, ResponseHeaders), Box<Error>> {
+                     -> ::std::result::Result<(Vec<Response>, ResponseHeaders), Box<dyn Error>> {
         debug!("condition: {:?}", condition);
         let mut params = vec![
             ("active", format!("{}", condition.active)),

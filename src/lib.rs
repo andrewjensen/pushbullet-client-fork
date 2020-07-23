@@ -52,8 +52,6 @@ See [examples/](examples) directory for more.
 #[macro_use]
 extern crate log;
 extern crate chrono;
-#[macro_use]
-extern crate hyper;
 extern crate reqwest;
 extern crate serde;
 #[macro_use]
@@ -87,11 +85,6 @@ pub fn date_time2float_unix_time(t: DateTime<Utc>) -> f64 {
     unix_time + (t.timestamp_subsec_nanos() as f64 / 1_000_000_000f64)
 }
 
-header! { (AccessToken, "Access-Token") => [String] }
-header! { (RatelimitLimit, "X-Ratelimit-Limit") => [i64] }
-header! { (RatelimitRemaining, "X-Ratelimit-Remaining") => [i64] }
-header! { (RatelimitReset, "X-Ratelimit-Reset") => [i64] }
-
 #[derive(Debug)]
 pub struct ResponseHeaders {
     pub ratelimit_limit: Option<i64>,
@@ -118,25 +111,19 @@ impl PushbulletClient {
     }
 
     fn get(&self, url: &str)
-            -> Result<(reqwest::Response, ResponseHeaders), Box<Error>> {
+            -> Result<(reqwest::blocking::Response, ResponseHeaders), Box<dyn Error>> {
         debug!("url: {}", url);
         debug!("access_token: {}", self.access_token);
 
-        let client = reqwest::Client::new();
+        let client = reqwest::blocking::Client::new();
         let mut response = client.get(url)
-            .header(AccessToken(self.access_token.clone()))
+            .header("Access-Token", self.access_token.clone())
             .send()?;
 
         if response.status().is_success() {
             debug!("success status: {}", response.status());
-            let response_headers = {
-                let h = response.headers();
-                ResponseHeaders {
-                    ratelimit_limit: h.get::<RatelimitLimit>().map(|h| h.0),
-                    ratelimit_remaining: h.get::<RatelimitRemaining>().map(|h| h.0),
-                    ratelimit_reset: h.get::<RatelimitReset>().map(|h| h.0)
-                }
-            };
+            let raw_headers = response.headers();
+            let response_headers = parse_response_headers(raw_headers);
             trace!("response_headers: {:?}", response_headers);
             Ok((response, response_headers))
         } else {
@@ -150,26 +137,20 @@ impl PushbulletClient {
     }
 
     fn post(&self, url: &str, json: Value)
-            -> Result<(reqwest::Response, ResponseHeaders), Box<Error>> {
+            -> Result<(reqwest::blocking::Response, ResponseHeaders), Box<dyn Error>> {
         debug!("url: {}", url);
         debug!("access_token: {}", self.access_token);
 
-        let client = reqwest::Client::new();
+        let client = reqwest::blocking::Client::new();
         let mut response = client.post(url)
-            .header(AccessToken(self.access_token.clone()))
+            .header("Access-Token", self.access_token.clone())
             .json(&json)
             .send()?;
 
         if response.status().is_success() {
             debug!("success status: {}", response.status());
-            let response_headers = {
-                let h = response.headers();
-                ResponseHeaders {
-                    ratelimit_limit: h.get::<RatelimitLimit>().map(|h| h.0),
-                    ratelimit_remaining: h.get::<RatelimitRemaining>().map(|h| h.0),
-                    ratelimit_reset: h.get::<RatelimitReset>().map(|h| h.0)
-                }
-            };
+            let raw_headers = response.headers();
+            let response_headers = parse_response_headers(raw_headers);
             trace!("response_headers: {:?}", response_headers);
             Ok((response, response_headers))
         } else {
@@ -180,6 +161,38 @@ impl PushbulletClient {
             }
             Err(From::from(io::Error::new(io::ErrorKind::Other, "Response has error status")))
         }
+    }
+}
+
+fn parse_response_headers(headers: &reqwest::header::HeaderMap) -> ResponseHeaders {
+    let ratelimit_limit = headers
+        .get("X-Ratelimit-Limit")
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .parse::<i64>()
+        .unwrap();
+
+    let ratelimit_remaining = headers
+        .get("X-Ratelimit-Remaining")
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .parse::<i64>()
+        .unwrap();
+
+    let ratelimit_reset = headers
+        .get("X-Ratelimit-Reset")
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .parse::<i64>()
+        .unwrap();
+
+    ResponseHeaders {
+        ratelimit_limit: Some(ratelimit_limit),
+        ratelimit_remaining: Some(ratelimit_remaining),
+        ratelimit_reset: Some(ratelimit_reset)
     }
 }
 
